@@ -21,7 +21,7 @@ class ExecutorNegativeTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="aasegs-exec-"))
 
-    # ---- T-WF-03：任务契约要素缺失/占位/自批 → REJECT ----
+    # ---- T-WF-05：任务契约要素缺失/占位/自批 → REJECT ----
     def _task(self):
         return {
             "task_id": "t-100", "owner": "agent-alpha", "risk_level": "R1",
@@ -34,7 +34,7 @@ class ExecutorNegativeTests(unittest.TestCase):
                                "expires_at": "2026-10-30T00:00:00Z"},
         }
 
-    def test_t_wf_03_task_contract_rejects_incomplete(self):
+    def test_t_wf_05_task_contract_rejects_incomplete(self):
         v = TaskContractValidator(self.tmp / "audit.jsonl")
         t = self._task()
         with self.assertRaises(ContractRejected):        # 缺必需字段
@@ -50,7 +50,7 @@ class ExecutorNegativeTests(unittest.TestCase):
                                                 "approver": "agent-alpha"}})
         self.assertEqual(v.validate(t), "READY_FOR_APPROVAL")   # 正向对照
 
-    # ---- T-WF-04：交付报告要素缺失/假 SHA/非法结案 → REJECT ----
+    # ---- T-WF-06：交付报告要素缺失/假 SHA/非法结案 → REJECT ----
     def _report(self):
         return {
             "task_id": "t-100", "run_id": "r-42",
@@ -62,7 +62,7 @@ class ExecutorNegativeTests(unittest.TestCase):
             "closure_result": "CLOSED",
         }
 
-    def test_t_wf_04_delivery_report_rejects_incomplete(self):
+    def test_t_wf_06_delivery_report_rejects_incomplete(self):
         v = DeliveryReportValidator(self.tmp / "audit.jsonl")
         r = self._report()
         with self.assertRaises(ContractRejected):        # 缺 commit_sha
