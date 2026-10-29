@@ -1,0 +1,26 @@
+name: gov-plane
+
+# 控制面自检：执行器负向用例必须全绿。
+# 本 workflow 运行在控制面仓库（独立信任域），不依赖数据面任何内容。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  executor-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Executor negative tests (10 cases)
+        run: python -m unittest discover -s tests -p "test_*.py" -v
