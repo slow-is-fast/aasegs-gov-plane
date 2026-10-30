@@ -22,5 +22,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Executor negative tests (10 cases)
+      # 不再写死用例数：写死就会过期（2026-10-30 复核时这里是 "(10 cases)"，
+      # 实际已 88 条）。步骤名与事实不符本身就是一种记账不实。
+      - name: Executor negative tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
