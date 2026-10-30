@@ -2103,6 +2103,50 @@ class RemoteGatewayTests(unittest.TestCase):
         p = self.g.replay("op-18", "db", idempotency_key="k-1")
         self.assertEqual(p["decision"], "REPLAY_WITH_KEY")
 
+    def test_T_REM_20_drift_then_failed_compensation_stays_manual(self):
+        """AUD-010-03 要的是整条链：漂移 → 尝试补偿 → 补偿失败 → 仍是人工。
+
+        单独测漂移（T-REM-11）和单独测补偿失败（T-REM-14）都不足以支撑它——
+        AUD-010-03 的实质是"这两件事都不许被悄悄吞掉、最终不得声称已恢复"。
+        """
+        self.g.register("api", "none", "available")
+        r = self.g.reconcile("op-20", "api", expected="DONE", actual="ROLLED_BACK")
+        self.assertEqual(r["result"], "DRIFT_DETECTED")
+        self.assertEqual(r["next"], MANUAL)
+        c = self.g.compensate("op-20", plan_ref="plan-20", result="partial")
+        self.assertEqual(c["result"], "COMPENSATION_FAILED")
+        self.assertEqual(c["next"], MANUAL)
+        # 补偿失败没把状态修回"可重放"：链条走完仍不得重放
+        with self.assertRaises(RemoteRejected):
+            self.g.replay("op-20", "api", reconcile_result=r)
+        # 漂移与补偿失败都要留痕；reconciled 不该出现（我们从没对上过）
+        self.assertEqual(len(self.g.audit.read("remote.drift_detected")), 1)
+        self.assertEqual(len(self.g.audit.read("remote.compensation_failed")), 1)
+        self.assertEqual(len(self.g.audit.read("remote.reconciled")), 0)
+
+    def test_T_REM_21_decision_table_exhaustive(self):
+        """AUD-009-03 的决策表逐格走一遍，含未登记兜底。
+
+        只测最坏那一格是不够的：那样"把 none+available 改成直接放行重放"
+        这种变异就逃得掉，而它恰好是实际中最容易出事的格子。
+        """
+        table = [
+            ("queue", "key", "available", "k-1", "REPLAY_WITH_KEY"),
+            ("api", "none", "available", None, "RECONCILE_FIRST"),
+            ("db", "none", "unavailable", None, MANUAL),
+            ("ghost", None, None, None, MANUAL),      # 未登记：按最保守
+        ]
+        for system, idem, query, key, expected in table:
+            if idem is not None:
+                self.g.register(system, idem, query)
+            with self.subTest(system=system):
+                p = self.g.plan("op-21", system, idempotency_key=key)
+                self.assertEqual(p["decision"], expected)
+                # MANUAL 的格子必须真的拦住 replay，不只是返回个标签
+                if expected == MANUAL:
+                    with self.assertRaises(RemoteRejected):
+                        self.g.replay("op-21", system, idempotency_key=key)
+
     def test_T_REM_19_decision_is_audited(self):
         # 用一个从未登记的系统：审计里必须留下 registered=False，
         # 否则事后无法区分"能力真的不足"与"我们没登记过"
